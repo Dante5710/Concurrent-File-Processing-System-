@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"  # S3 API port
+      - "9001:9001"  # MinIO Console port
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin      # S3 Access Key
+      MINIO_ROOT_PASSWORD: minioadmin  # S3 Secret Key
+    command: server /data --console-address ":9001"
+
+  log-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: log-generator
+    depends_on:
+      - minio  # Waits for MinIO to be healthy
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    command: python log_generator.py # Runs this script once
+
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: processor
+    depends_on:
+      - log-generator # Waits for the logs to be generated
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    command: python s3_log_processor.py # Runs the main project
+
+volumes:
+  minio-data:
